@@ -1,0 +1,427 @@
+:root {
+	color-scheme: light;
+	font-family: "IBM Plex Sans", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", sans-serif;
+	line-height: 1.6;
+	font-weight: 400;
+	background: #ffffff;
+	color: #111111;
+	--page-width: min(1180px, calc(100vw - 40px));
+	--border: #1f1f1f;
+	--muted: #5d5d5d;
+	--panel: #fbfbf8;
+	--soft: #efefea;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+	min-height: 100%;
+	margin: 0;
+}
+
+body {
+	background:
+		linear-gradient(to bottom, rgba(0, 0, 0, 0.04), rgba(0, 0, 0, 0)) 0 0 / 100% 180px no-repeat,
+		#ffffff;
+	color: #111111;
+}
+
+a {
+	color: inherit;
+	text-decoration: none;
+}
+
+button,
+input,
+textarea {
+	font: inherit;
+}
+
+button {
+	cursor: pointer;
+}
+
+.app-shell {
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
+
+.site-header {
+	border-bottom: 1px solid var(--border);
+	background: rgba(255, 255, 255, 0.95);
+	backdrop-filter: blur(8px);
+	position: sticky;
+	top: 0;
+	z-index: 10;
+}
+
+.site-header__inner,
+.site-footer,
+.page {
+	width: var(--page-width);
+	margin: 0 auto;
+}
+
+.site-header__inner {
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	align-items: center;
+	gap: 24px;
+	padding: 18px 0;
+}
+
+.brand {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.brand__en,
+.hero__eyebrow,
+.section-label {
+	font-size: 0.82rem;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--muted);
+}
+
+.brand__cn {
+	font-family: "Source Han Serif SC", "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+	font-size: 1.25rem;
+}
+
+.main-nav,
+.header-actions,
+.hero__actions,
+.talk-card__actions,
+.form-actions,
+.table-actions {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+
+.main-nav {
+	justify-content: center;
+}
+
+.nav-link {
+	padding: 6px 0;
+	border-bottom: 1px solid transparent;
+}
+
+.nav-link--active {
+	border-color: var(--border);
+}
+
+.site-main {
+	flex: 1;
+	padding: 42px 0 72px;
+}
+
+.page {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+}
+
+.hero,
+.section-card {
+	border: 1px solid var(--border);
+	background: #ffffff;
+	padding: 28px;
+}
+
+.hero {
+	min-height: 420px;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	position: relative;
+	background:
+		radial-gradient(circle at top right, rgba(0, 0, 0, 0.06), transparent 28%),
+		linear-gradient(180deg, #ffffff 0%, #fbfbf8 100%);
+}
+
+.hero::after {
+	content: "";
+	position: absolute;
+	inset: 18px;
+	border: 1px solid rgba(0, 0, 0, 0.1);
+	pointer-events: none;
+}
+
+.hero__title,
+.section-card h1,
+.section-card h2,
+.talk-card__title {
+	font-family: "Source Han Serif SC", "Songti SC", "STSong", "Noto Serif CJK SC", serif;
+}
+
+.hero__title {
+	display: grid;
+	gap: 8px;
+	margin: 0;
+	font-size: clamp(2.2rem, 6vw, 4.7rem);
+	line-height: 1.08;
+	max-width: 10ch;
+}
+
+.hero__subtitle {
+	max-width: 720px;
+	font-size: 1.08rem;
+	color: #2a2a2a;
+	margin: 0;
+}
+
+.section-card {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+}
+
+.section-card--wide {
+	gap: 28px;
+}
+
+.section-heading {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 20px;
+}
+
+.section-heading h1,
+.section-heading h2,
+.detail-block h2,
+.info-block h2 {
+	margin: 0;
+}
+
+.text-link,
+.muted {
+	color: var(--muted);
+}
+
+.text-link {
+	text-decoration: underline;
+	text-underline-offset: 4px;
+}
+
+.talk-grid,
+.info-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 18px;
+}
+
+.talk-card,
+.info-block {
+	border: 1px solid var(--border);
+	padding: 20px;
+	background: var(--panel);
+}
+
+.talk-card {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+
+.talk-card__meta,
+.talk-card__footer {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+}
+
+.talk-card__meta {
+	font-size: 0.92rem;
+	color: var(--muted);
+}
+
+.talk-card__title {
+	margin: 0;
+	font-size: 1.35rem;
+	line-height: 1.2;
+}
+
+.talk-card__summary,
+.detail-block p,
+.info-block p,
+.table-summary {
+	margin: 0;
+}
+
+.detail-grid {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 16px;
+	padding: 0;
+	margin: 0;
+}
+
+.detail-grid div {
+	border-top: 1px solid var(--soft);
+	padding-top: 14px;
+}
+
+.detail-grid dt {
+	color: var(--muted);
+	font-size: 0.92rem;
+}
+
+.detail-grid dd {
+	margin: 8px 0 0;
+}
+
+.detail-block {
+	border-top: 1px solid var(--soft);
+	padding-top: 18px;
+}
+
+.button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 10px 16px;
+	border: 1px solid var(--border);
+	background: #111111;
+	color: #ffffff;
+	min-height: 42px;
+}
+
+.button:hover {
+	background: #222222;
+}
+
+.button--ghost {
+	background: transparent;
+	color: #111111;
+}
+
+.button--ghost:hover {
+	background: var(--soft);
+}
+
+.button--danger {
+	background: #ffffff;
+	color: #8f1818;
+	border-color: #8f1818;
+}
+
+.button--danger:hover {
+	background: #fff1f1;
+}
+
+.narrow-card {
+	max-width: 560px;
+}
+
+.stack-form {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.field-grid {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 16px;
+}
+
+.field {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.field input,
+.field textarea {
+	border: 1px solid var(--border);
+	padding: 12px 14px;
+	background: #ffffff;
+}
+
+.field textarea {
+	resize: vertical;
+}
+
+.form-error {
+	color: #9c2222;
+	margin: 0;
+}
+
+.table-shell {
+	overflow-x: auto;
+}
+
+.admin-table {
+	width: 100%;
+	border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+	padding: 16px 12px;
+	border-top: 1px solid var(--soft);
+	vertical-align: top;
+	text-align: left;
+}
+
+.site-footer {
+	border-top: 1px solid var(--border);
+	padding: 28px 0 42px;
+}
+
+.site-footer p {
+	margin: 0;
+}
+
+@media (max-width: 960px) {
+	.site-header__inner,
+	.section-heading,
+	.detail-grid,
+	.field-grid {
+		grid-template-columns: 1fr;
+	}
+
+	.site-header__inner {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+	}
+
+	.main-nav {
+		justify-content: flex-start;
+	}
+
+	.talk-grid,
+	.info-grid {
+		grid-template-columns: 1fr;
+	}
+}
+
+@media (max-width: 640px) {
+	.site-main {
+		padding-top: 24px;
+	}
+
+	.hero,
+	.section-card {
+		padding: 20px;
+	}
+
+	.page,
+	.site-header__inner,
+	.site-footer {
+		width: min(100vw - 24px, 1180px);
+	}
+}

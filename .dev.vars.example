@@ -1,0 +1,3 @@
+SESSION_SECRET=replace-with-a-long-random-string
+ADMIN1_PASSWORD=replace-with-admin1-password
+ADMIN2_PASSWORD=replace-with-admin2-password
