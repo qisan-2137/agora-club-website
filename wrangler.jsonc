@@ -24,16 +24,9 @@
 			"database_id": "d40210ed-1f14-4503-9c54-806ec7d8a767"
 		}
 	],
-	"r2_buckets": [
-		{
-			"binding": "PPTS",
-			"bucket_name": "agora-club-ppt"
-		}
-	],
 	"vars": {
 		"SESSION_COOKIE_NAME": "agora_session",
-		"SESSION_DURATION_DAYS": "7",
-		"MAX_PPT_SIZE_MB": "40"
+		"SESSION_DURATION_DAYS": "7"
 	},
 	"secrets": {
 		"required": ["SESSION_SECRET"]

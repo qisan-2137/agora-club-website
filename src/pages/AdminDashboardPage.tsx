@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { TalkSummary } from "../../shared/types";
-import { ApiError, deleteTalk, getTalkDownloadUrl, getTalks } from "../lib/api";
-import { formatDateLabel, formatFileSize } from "../lib/format";
+import { ApiError, deleteTalk, getTalks } from "../lib/api";
+import { formatDateLabel, formatUrlHost } from "../lib/format";
 import { useSession } from "../lib/session";
 
 export function AdminDashboardPage() {
@@ -53,7 +53,7 @@ export function AdminDashboardPage() {
 									<th>标题</th>
 									<th>演讲者</th>
 									<th>日期</th>
-									<th>文件</th>
+									<th>PPT 外链</th>
 									<th>操作</th>
 								</tr>
 							</thead>
@@ -67,24 +67,24 @@ export function AdminDashboardPage() {
 										<td>{talk.speakerName}</td>
 										<td>{formatDateLabel(talk.eventDate)}</td>
 										<td>
-											{talk.pptFileName}
-											<br />
-											<span className="muted">{formatFileSize(talk.pptSizeBytes)}</span>
+											<a className="text-link url-text" href={talk.pptUrl} target="_blank" rel="noreferrer">
+												{formatUrlHost(talk.pptUrl)}
+											</a>
 										</td>
 										<td>
 											<div className="table-actions">
 												<Link className="button button--ghost" to={`/admin/talks/${talk.id}/edit`}>
 													编辑
 												</Link>
-												<a className="button button--ghost" href={getTalkDownloadUrl(talk.id)}>
-													下载
+												<a className="button button--ghost" href={talk.pptUrl} target="_blank" rel="noreferrer">
+													打开外链
 												</a>
 												<button
 													className="button button--danger"
 													type="button"
 													disabled={pendingDeleteId === talk.id}
 													onClick={async () => {
-														if (!window.confirm(`确定删除《${talk.title}》及其 PPT 文件吗？`)) {
+														if (!window.confirm(`确定删除《${talk.title}》这条演讲记录吗？`)) {
 															return;
 														}
 														setPendingDeleteId(talk.id);

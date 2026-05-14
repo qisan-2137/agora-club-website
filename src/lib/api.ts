@@ -18,7 +18,7 @@ export interface TalkFormInput {
 	eventDate: string;
 	summary: string;
 	speakerFeedback: string;
-	pptFile?: File | null;
+	pptUrl: string;
 }
 
 async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
@@ -38,23 +38,6 @@ async function requestJson<T>(input: RequestInfo | URL, init?: RequestInit): Pro
 	}
 
 	return body as T;
-}
-
-function buildTalkFormData(input: TalkFormInput): FormData {
-	const formData = new FormData();
-	formData.set("title", input.title);
-	formData.set("speakerName", input.speakerName);
-	formData.set("eventDate", input.eventDate);
-	formData.set("summary", input.summary);
-	formData.set("speakerFeedback", input.speakerFeedback);
-	if (input.pptFile) {
-		formData.set("pptFile", input.pptFile);
-	}
-	return formData;
-}
-
-export function getTalkDownloadUrl(talkId: number): string {
-	return `/api/talks/${talkId}/download`;
 }
 
 export function getSession() {
@@ -92,14 +75,20 @@ export function getTalk(talkId: number) {
 export function createTalk(input: TalkFormInput) {
 	return requestJson<TalkPayload>("/api/admin/talks", {
 		method: "POST",
-		body: buildTalkFormData(input),
+		headers: {
+			"content-type": "application/json",
+		},
+		body: JSON.stringify(input),
 	});
 }
 
 export function updateTalk(talkId: number, input: TalkFormInput) {
 	return requestJson<TalkPayload>(`/api/admin/talks/${talkId}`, {
 		method: "PATCH",
-		body: buildTalkFormData(input),
+		headers: {
+			"content-type": "application/json",
+		},
+		body: JSON.stringify(input),
 	});
 }
 

@@ -69,7 +69,7 @@ export function HomePage() {
 				{loading ? <p className="muted">正在加载最新演讲...</p> : null}
 				{error ? <p className="form-error">{error}</p> : null}
 				{!loading && !error && talks.length === 0 ? (
-					<p className="muted">当前还没有已发布的演讲档案，管理员登录后即可上传第一份 PPT。</p>
+					<p className="muted">当前还没有已发布的演讲档案，管理员登录后即可录入第一条演讲记录与 PPT 外链。</p>
 				) : null}
 				<div className="talk-grid">
 					{talks.map((talk) => (

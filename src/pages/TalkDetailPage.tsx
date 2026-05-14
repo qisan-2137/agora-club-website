@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import type { TalkDetail } from "../../shared/types";
 import { ApiError, getTalk } from "../lib/api";
-import { formatDateLabel, formatFileSize } from "../lib/format";
+import { formatDateLabel, formatUrlHost } from "../lib/format";
 
 export function TalkDetailPage() {
 	const { talkId } = useParams();
@@ -73,8 +73,8 @@ export function TalkDetailPage() {
 						<p className="section-label">Talk Detail</p>
 						<h1>{talk.title}</h1>
 					</div>
-					<a className="button" href={talk.downloadUrl}>
-						下载 PPT
+					<a className="button" href={talk.pptUrl} target="_blank" rel="noreferrer">
+						查看 / 下载 PPT
 					</a>
 				</div>
 				<dl className="detail-grid">
@@ -87,9 +87,11 @@ export function TalkDetailPage() {
 						<dd>{formatDateLabel(talk.eventDate)}</dd>
 					</div>
 					<div>
-						<dt>文件</dt>
+						<dt>PPT 外链</dt>
 						<dd>
-							{talk.pptFileName} · {formatFileSize(talk.pptSizeBytes)}
+							<a className="text-link url-text" href={talk.pptUrl} target="_blank" rel="noreferrer">
+								{formatUrlHost(talk.pptUrl)}
+							</a>
 						</dd>
 					</div>
 				</dl>

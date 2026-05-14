@@ -12,15 +12,13 @@ export interface TalkSummary {
 	speakerName: string;
 	eventDate: string;
 	summary: string;
-	pptFileName: string;
-	pptSizeBytes: number;
+	pptUrl: string;
 	createdAt: string;
 	updatedAt: string;
 }
 
 export interface TalkDetail extends TalkSummary {
 	speakerFeedback: string | null;
-	downloadUrl: string;
 }
 
 export interface TalksPayload {

@@ -6,7 +6,7 @@ P0 采用单 Worker + 静态资源 + API 同域结构：
 - 前端：React + Vite + TypeScript
 - 后端：Cloudflare Workers
 - 数据：Cloudflare D1
-- 文件：Cloudflare R2
+- PPT：管理员填写外部网盘/云文档链接
 
 ## P0 已实现
 
@@ -17,7 +17,7 @@ P0 采用单 Worker + 静态资源 + API 同域结构：
 - 管理员登录页
 - 管理后台
 - 演讲新增、编辑、删除
-- PPT 上传与公开下载
+- PPT 外链管理与访客跳转
 - 演讲者反馈文字编辑
 
 ## 项目结构
@@ -96,19 +96,13 @@ npm run db:seed:remote
 npx wrangler d1 create agora-club-db
 ```
 
-2. 创建 R2 bucket
-
-```bash
-npx wrangler r2 bucket create agora-club-ppt
-```
-
-3. 写入运行时 secret
+2. 写入运行时 secret
 
 ```bash
 npx wrangler secret put SESSION_SECRET
 ```
 
-4. 部署
+3. 部署
 
 ```bash
 npm run deploy
@@ -122,10 +116,10 @@ npm run deploy
 gh repo create agora-club-website --public --source=. --remote=origin --push
 ```
 
-## 当前已知外部阻塞
+## PPT 管理方式
 
-当前 Cloudflare 账号返回：
+P0 不上传 PPT 文件到 Cloudflare。
 
-- `Please enable R2 through the Cloudflare Dashboard. [code: 10042]`
-
-这意味着代码、本地模拟与 D1 已就绪，但生产 R2 bucket 无法在该账号下创建，因此正式部署到 `workers.dev` 仍需要先在 Cloudflare Dashboard 开通 R2。
+- 管理员先把 PPT 放到外部平台
+- 在后台填写 `ppt_url`
+- 访客点击按钮后直接跳转到外部链接

@@ -214,6 +214,10 @@ button {
 	text-underline-offset: 4px;
 }
 
+.url-text {
+	overflow-wrap: anywhere;
+}
+
 .talk-grid,
 .info-grid {
 	display: grid;

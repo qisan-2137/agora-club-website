@@ -15,3 +15,12 @@ export function formatFileSize(bytes: number): string {
 	}
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+export function formatUrlHost(urlValue: string): string {
+	try {
+		const url = new URL(urlValue);
+		return url.hostname.replace(/^www\./, "");
+	} catch {
+		return urlValue;
+	}
+}

@@ -2,7 +2,6 @@ import { startTransition, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import type { TalkDetail } from "../../shared/types";
 import { ApiError, createTalk, getTalk, updateTalk, type TalkFormInput } from "../lib/api";
-import { formatFileSize } from "../lib/format";
 
 interface TalkEditorPageProps {
 	mode: "create" | "edit";
@@ -14,6 +13,7 @@ const initialForm = {
 	eventDate: "",
 	summary: "",
 	speakerFeedback: "",
+	pptUrl: "",
 };
 
 export function TalkEditorPage({ mode }: TalkEditorPageProps) {
@@ -21,7 +21,6 @@ export function TalkEditorPage({ mode }: TalkEditorPageProps) {
 	const { talkId } = useParams();
 	const [form, setForm] = useState(initialForm);
 	const [currentTalk, setCurrentTalk] = useState<TalkDetail | null>(null);
-	const [pptFile, setPptFile] = useState<File | null>(null);
 	const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 	const [pageError, setPageError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(mode === "edit");
@@ -53,6 +52,7 @@ export function TalkEditorPage({ mode }: TalkEditorPageProps) {
 						eventDate: payload.talk.eventDate,
 						summary: payload.talk.summary,
 						speakerFeedback: payload.talk.speakerFeedback || "",
+						pptUrl: payload.talk.pptUrl,
 					});
 				}
 			} catch (caught) {
@@ -118,7 +118,6 @@ export function TalkEditorPage({ mode }: TalkEditorPageProps) {
 
 						const payload: TalkFormInput = {
 							...form,
-							pptFile,
 						};
 
 						try {
@@ -174,18 +173,19 @@ export function TalkEditorPage({ mode }: TalkEditorPageProps) {
 							{fieldErrors.eventDate ? <small className="form-error">{fieldErrors.eventDate}</small> : null}
 						</label>
 						<label className="field">
-							<span>PPT 文件</span>
+							<span>PPT 外链</span>
 							<input
-								type="file"
-								accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-								onChange={(event) => setPptFile(event.target.files?.[0] || null)}
-								required={mode === "create"}
+								type="url"
+								placeholder="https://..."
+								value={form.pptUrl}
+								onChange={(event) => setForm((current) => ({ ...current, pptUrl: event.target.value }))}
+								required
 							/>
-							{fieldErrors.pptFile ? <small className="form-error">{fieldErrors.pptFile}</small> : null}
+							{fieldErrors.pptUrl ? <small className="form-error">{fieldErrors.pptUrl}</small> : null}
 							{currentTalk ? (
-								<small className="muted">
-									当前文件：{currentTalk.pptFileName} · {formatFileSize(currentTalk.pptSizeBytes)}
-								</small>
+								<a className="text-link url-text" href={currentTalk.pptUrl} target="_blank" rel="noreferrer">
+									查看当前外链
+								</a>
 							) : null}
 						</label>
 					</div>

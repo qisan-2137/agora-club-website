@@ -15,17 +15,13 @@ const JSON_HEADERS = {
 const textEncoder = new TextEncoder();
 const SESSION_COOKIE_FALLBACK = "agora_session";
 const SESSION_DURATION_DAYS_FALLBACK = 7;
-const MAX_PPT_SIZE_MB_FALLBACK = 40;
-const TALK_FILE_PATTERN = /\.(ppt|pptx)$/i;
 const TALK_LIMIT_MAX = 6;
 
 type AppEnv = Env & {
 	DB: D1Database;
-	PPTS: R2Bucket;
 	SESSION_SECRET: string;
 	SESSION_COOKIE_NAME?: string;
 	SESSION_DURATION_DAYS?: string;
-	MAX_PPT_SIZE_MB?: string;
 };
 
 interface AdminRow {
@@ -41,7 +37,6 @@ interface SessionRow {
 	admin_id: number;
 	username: string;
 	role: "admin";
-	expires_at: string;
 }
 
 interface TalkRow {
@@ -51,21 +46,18 @@ interface TalkRow {
 	event_date: string;
 	summary: string;
 	speaker_feedback: string | null;
-	ppt_object_key: string;
-	ppt_original_filename: string;
-	ppt_mime_type: string;
-	ppt_size_bytes: number;
+	ppt_url: string;
 	created_at: string;
 	updated_at: string;
 }
 
-interface ParsedTalkForm {
+interface ParsedTalkInput {
 	title: string;
 	speakerName: string;
 	eventDate: string;
 	summary: string;
 	speakerFeedback: string | null;
-	file: File | null;
+	pptUrl: string;
 }
 
 class HttpError extends Error {
@@ -94,12 +86,12 @@ function jsonError(status: number, error: string, details?: Record<string, strin
 	return json(payload, { status });
 }
 
-function normalizeString(value: FormDataEntryValue | null): string {
+function normalizeUnknownString(value: unknown): string {
 	return typeof value === "string" ? value.trim() : "";
 }
 
-function parseOptionalText(value: FormDataEntryValue | null): string | null {
-	const text = normalizeString(value);
+function parseOptionalUnknownText(value: unknown): string | null {
+	const text = normalizeUnknownString(value);
 	return text ? text : null;
 }
 
@@ -117,10 +109,6 @@ function getCookieName(env: AppEnv): string {
 
 function getSessionDurationDays(env: AppEnv): number {
 	return parseInteger(env.SESSION_DURATION_DAYS, SESSION_DURATION_DAYS_FALLBACK);
-}
-
-function getMaxPptSizeBytes(env: AppEnv): number {
-	return parseInteger(env.MAX_PPT_SIZE_MB, MAX_PPT_SIZE_MB_FALLBACK) * 1024 * 1024;
 }
 
 function isLocalHost(hostname: string): boolean {
@@ -151,26 +139,32 @@ function ensureSameOrigin(request: Request): Response | null {
 	return jsonError(403, "Cross-origin write requests are blocked.");
 }
 
-function mapTalkRow(request: Request, row: TalkRow): TalkSummary {
-	void request;
+function isValidPptUrl(value: string): boolean {
+	try {
+		const url = new URL(value);
+		return url.protocol === "http:" || url.protocol === "https:";
+	} catch {
+		return false;
+	}
+}
+
+function mapTalkRow(row: TalkRow): TalkSummary {
 	return {
 		id: row.id,
 		title: row.title,
 		speakerName: row.speaker_name,
 		eventDate: row.event_date,
 		summary: row.summary,
-		pptFileName: row.ppt_original_filename,
-		pptSizeBytes: row.ppt_size_bytes,
+		pptUrl: row.ppt_url,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 	};
 }
 
-function mapTalkDetail(request: Request, row: TalkRow): TalkDetail {
+function mapTalkDetail(row: TalkRow): TalkDetail {
 	return {
-		...mapTalkRow(request, row),
+		...mapTalkRow(row),
 		speakerFeedback: row.speaker_feedback,
-		downloadUrl: new URL(`/api/talks/${row.id}/download`, request.url).pathname,
 	};
 }
 
@@ -283,7 +277,7 @@ async function getAuthenticatedAdmin(request: Request, env: AppEnv, ctx: Executi
 	const tokenHash = await hashSessionToken(token, env.SESSION_SECRET);
 	const result = await env.DB.prepare(
 		`
-		SELECT admin_sessions.id, admin_sessions.admin_id, admins.username, admins.role, admin_sessions.expires_at
+		SELECT admin_sessions.id, admin_sessions.admin_id, admins.username, admins.role
 		FROM admin_sessions
 		INNER JOIN admins ON admins.id = admin_sessions.admin_id
 		WHERE admin_sessions.token_hash = ?
@@ -329,9 +323,7 @@ async function requireAdmin(
 
 async function listTalkRows(env: AppEnv, limit?: number): Promise<TalkRow[]> {
 	const baseQuery = `
-		SELECT id, title, speaker_name, event_date, summary, speaker_feedback,
-		       ppt_object_key, ppt_original_filename, ppt_mime_type, ppt_size_bytes,
-		       created_at, updated_at
+		SELECT id, title, speaker_name, event_date, summary, speaker_feedback, ppt_url, created_at, updated_at
 		FROM talks
 		ORDER BY event_date DESC, id DESC
 	`;
@@ -348,9 +340,7 @@ async function listTalkRows(env: AppEnv, limit?: number): Promise<TalkRow[]> {
 async function getTalkRowById(env: AppEnv, talkId: number): Promise<TalkRow | null> {
 	return env.DB.prepare(
 		`
-		SELECT id, title, speaker_name, event_date, summary, speaker_feedback,
-		       ppt_object_key, ppt_original_filename, ppt_mime_type, ppt_size_bytes,
-		       created_at, updated_at
+		SELECT id, title, speaker_name, event_date, summary, speaker_feedback, ppt_url, created_at, updated_at
 		FROM talks
 		WHERE id = ?
 		LIMIT 1
@@ -360,36 +350,26 @@ async function getTalkRowById(env: AppEnv, talkId: number): Promise<TalkRow | nu
 		.first<TalkRow>();
 }
 
-function sanitizeFilename(name: string): string {
-	return name
-		.normalize("NFKC")
-		.replace(/[^\p{L}\p{N}._-]+/gu, "-")
-		.replace(/-+/g, "-")
-		.replace(/^-|-$/g, "")
-		.toLowerCase();
-}
-
-function makeObjectKey(eventDate: string, originalFilename: string): string {
-	const safeName =
-		sanitizeFilename(originalFilename) ||
-		`slides${originalFilename.toLowerCase().endsWith(".ppt") ? ".ppt" : ".pptx"}`;
-	return `talks/${eventDate}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-}
-
-async function parseTalkForm(request: Request, env: AppEnv, isCreate: boolean): Promise<ParsedTalkForm> {
-	const contentType = request.headers.get("content-type") || "";
-	if (!contentType.includes("multipart/form-data")) {
-		throw new HttpError(415, "Please submit talk data as multipart/form-data.");
+async function parseJsonBody(request: Request): Promise<Record<string, unknown>> {
+	try {
+		const body = (await request.json()) as unknown;
+		if (!body || typeof body !== "object" || Array.isArray(body)) {
+			throw new Error("invalid");
+		}
+		return body as Record<string, unknown>;
+	} catch {
+		throw new HttpError(400, "Invalid JSON request body.");
 	}
+}
 
-	const formData = await request.formData();
-	const title = normalizeString(formData.get("title"));
-	const speakerName = normalizeString(formData.get("speakerName"));
-	const eventDate = normalizeString(formData.get("eventDate"));
-	const summary = normalizeString(formData.get("summary"));
-	const speakerFeedback = parseOptionalText(formData.get("speakerFeedback"));
-	const fileValue = formData.get("pptFile");
-	const file = fileValue instanceof File && fileValue.size > 0 ? fileValue : null;
+async function parseTalkInput(request: Request): Promise<ParsedTalkInput> {
+	const body = await parseJsonBody(request);
+	const title = normalizeUnknownString(body.title);
+	const speakerName = normalizeUnknownString(body.speakerName);
+	const eventDate = normalizeUnknownString(body.eventDate);
+	const summary = normalizeUnknownString(body.summary);
+	const speakerFeedback = parseOptionalUnknownText(body.speakerFeedback);
+	const pptUrl = normalizeUnknownString(body.pptUrl);
 	const details: Record<string, string> = {};
 
 	if (!title) {
@@ -404,17 +384,10 @@ async function parseTalkForm(request: Request, env: AppEnv, isCreate: boolean): 
 	if (!summary) {
 		details.summary = "请输入演讲简介。";
 	}
-	if (isCreate && !file) {
-		details.pptFile = "请上传 PPT 文件。";
-	}
-
-	if (file) {
-		if (!TALK_FILE_PATTERN.test(file.name)) {
-			details.pptFile = "仅支持 .ppt 或 .pptx 文件。";
-		}
-		if (file.size > getMaxPptSizeBytes(env)) {
-			details.pptFile = `PPT 文件大小不能超过 ${parseInteger(env.MAX_PPT_SIZE_MB, MAX_PPT_SIZE_MB_FALLBACK)}MB。`;
-		}
+	if (!pptUrl) {
+		details.pptUrl = "请输入 PPT 外链。";
+	} else if (!isValidPptUrl(pptUrl)) {
+		details.pptUrl = "请输入有效的 http 或 https 链接。";
 	}
 
 	if (Object.keys(details).length > 0) {
@@ -427,42 +400,14 @@ async function parseTalkForm(request: Request, env: AppEnv, isCreate: boolean): 
 		eventDate,
 		summary,
 		speakerFeedback,
-		file,
-	};
-}
-
-async function uploadPptFile(env: AppEnv, eventDate: string, file: File): Promise<{
-	objectKey: string;
-	originalFilename: string;
-	mimeType: string;
-	sizeBytes: number;
-}> {
-	const objectKey = makeObjectKey(eventDate, file.name);
-	const mimeType =
-		file.type ||
-		(file.name.toLowerCase().endsWith(".ppt")
-			? "application/vnd.ms-powerpoint"
-			: "application/vnd.openxmlformats-officedocument.presentationml.presentation");
-
-	await env.PPTS.put(objectKey, await file.arrayBuffer(), {
-		httpMetadata: {
-			contentType: mimeType,
-			contentDisposition: `attachment; filename="${encodeURIComponent(file.name)}"`,
-		},
-	});
-
-	return {
-		objectKey,
-		originalFilename: file.name,
-		mimeType,
-		sizeBytes: file.size,
+		pptUrl,
 	};
 }
 
 async function handleLogin(request: Request, env: AppEnv): Promise<Response> {
-	const body = (await request.json()) as { username?: string; password?: string };
-	const username = body.username?.trim();
-	const password = body.password;
+	const body = await parseJsonBody(request);
+	const username = normalizeUnknownString(body.username);
+	const password = normalizeUnknownString(body.password);
 
 	if (!username || !password) {
 		return jsonError(400, "Username and password are required.");
@@ -545,57 +490,48 @@ async function handleLogout(request: Request, env: AppEnv): Promise<Response> {
 }
 
 async function handleCreateTalk(request: Request, env: AppEnv, admin: AdminIdentity): Promise<Response> {
-	const data = await parseTalkForm(request, env, true);
-	if (!data.file) {
-		return jsonError(400, "PPT file is required.");
-	}
-
-	let uploadResult: Awaited<ReturnType<typeof uploadPptFile>> | null = null;
-	try {
-		uploadResult = await uploadPptFile(env, data.eventDate, data.file);
-		const inserted = await env.DB.prepare(
-			`
-			INSERT INTO talks (
-				title, speaker_name, event_date, summary, speaker_feedback,
-				ppt_object_key, ppt_original_filename, ppt_mime_type, ppt_size_bytes,
-				created_by_admin_id, updated_by_admin_id, created_at, updated_at
-			)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-			RETURNING id
-			`
+	const data = await parseTalkInput(request);
+	const inserted = await env.DB.prepare(
+		`
+		INSERT INTO talks (
+			title,
+			speaker_name,
+			event_date,
+			summary,
+			speaker_feedback,
+			ppt_url,
+			created_by_admin_id,
+			updated_by_admin_id,
+			created_at,
+			updated_at
 		)
-			.bind(
-				data.title,
-				data.speakerName,
-				data.eventDate,
-				data.summary,
-				data.speakerFeedback,
-				uploadResult.objectKey,
-				uploadResult.originalFilename,
-				uploadResult.mimeType,
-				uploadResult.sizeBytes,
-				admin.id,
-				admin.id
-			)
-			.first<{ id: number }>();
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		RETURNING id
+		`
+	)
+		.bind(
+			data.title,
+			data.speakerName,
+			data.eventDate,
+			data.summary,
+			data.speakerFeedback,
+			data.pptUrl,
+			admin.id,
+			admin.id
+		)
+		.first<{ id: number }>();
 
-		if (!inserted?.id) {
-			throw new HttpError(500, "Failed to save the talk record.");
-		}
-
-		const talk = await getTalkRowById(env, inserted.id);
-		if (!talk) {
-			throw new HttpError(500, "Talk was created but could not be reloaded.");
-		}
-
-		const payload: TalkPayload = { talk: mapTalkDetail(request, talk) };
-		return json(payload, { status: 201 });
-	} catch (error) {
-		if (uploadResult) {
-			await env.PPTS.delete(uploadResult.objectKey);
-		}
-		throw error;
+	if (!inserted?.id) {
+		throw new HttpError(500, "Failed to save the talk record.");
 	}
+
+	const talk = await getTalkRowById(env, inserted.id);
+	if (!talk) {
+		throw new HttpError(500, "Talk was created but could not be reloaded.");
+	}
+
+	const payload: TalkPayload = { talk: mapTalkDetail(talk) };
+	return json(payload, { status: 201 });
 }
 
 async function handleUpdateTalk(request: Request, env: AppEnv, admin: AdminIdentity, talkId: number): Promise<Response> {
@@ -604,68 +540,40 @@ async function handleUpdateTalk(request: Request, env: AppEnv, admin: AdminIdent
 		return jsonError(404, "Talk not found.");
 	}
 
-	const data = await parseTalkForm(request, env, false);
-	let uploadResult: Awaited<ReturnType<typeof uploadPptFile>> | null = null;
-
-	try {
-		if (data.file) {
-			uploadResult = await uploadPptFile(env, data.eventDate, data.file);
-		}
-
-		const nextObjectKey = uploadResult?.objectKey ?? existing.ppt_object_key;
-		const nextFilename = uploadResult?.originalFilename ?? existing.ppt_original_filename;
-		const nextMimeType = uploadResult?.mimeType ?? existing.ppt_mime_type;
-		const nextSize = uploadResult?.sizeBytes ?? existing.ppt_size_bytes;
-
-		await env.DB.prepare(
-			`
-			UPDATE talks
-			SET title = ?,
-			    speaker_name = ?,
-			    event_date = ?,
-			    summary = ?,
-			    speaker_feedback = ?,
-			    ppt_object_key = ?,
-			    ppt_original_filename = ?,
-			    ppt_mime_type = ?,
-			    ppt_size_bytes = ?,
-			    updated_by_admin_id = ?,
-			    updated_at = CURRENT_TIMESTAMP
-			WHERE id = ?
-			`
+	const data = await parseTalkInput(request);
+	await env.DB.prepare(
+		`
+		UPDATE talks
+		SET title = ?,
+		    speaker_name = ?,
+		    event_date = ?,
+		    summary = ?,
+		    speaker_feedback = ?,
+		    ppt_url = ?,
+		    updated_by_admin_id = ?,
+		    updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?
+		`
+	)
+		.bind(
+			data.title,
+			data.speakerName,
+			data.eventDate,
+			data.summary,
+			data.speakerFeedback,
+			data.pptUrl,
+			admin.id,
+			talkId
 		)
-			.bind(
-				data.title,
-				data.speakerName,
-				data.eventDate,
-				data.summary,
-				data.speakerFeedback,
-				nextObjectKey,
-				nextFilename,
-				nextMimeType,
-				nextSize,
-				admin.id,
-				talkId
-			)
-			.run();
+		.run();
 
-		if (uploadResult && existing.ppt_object_key !== uploadResult.objectKey) {
-			await env.PPTS.delete(existing.ppt_object_key);
-		}
-
-		const talk = await getTalkRowById(env, talkId);
-		if (!talk) {
-			throw new HttpError(500, "Updated talk could not be reloaded.");
-		}
-
-		const payload: TalkPayload = { talk: mapTalkDetail(request, talk) };
-		return json(payload);
-	} catch (error) {
-		if (uploadResult) {
-			await env.PPTS.delete(uploadResult.objectKey);
-		}
-		throw error;
+	const talk = await getTalkRowById(env, talkId);
+	if (!talk) {
+		throw new HttpError(500, "Updated talk could not be reloaded.");
 	}
+
+	const payload: TalkPayload = { talk: mapTalkDetail(talk) };
+	return json(payload);
 }
 
 async function handleDeleteTalk(env: AppEnv, talkId: number): Promise<Response> {
@@ -675,28 +583,7 @@ async function handleDeleteTalk(env: AppEnv, talkId: number): Promise<Response> 
 	}
 
 	await env.DB.prepare("DELETE FROM talks WHERE id = ?").bind(talkId).run();
-	await env.PPTS.delete(existing.ppt_object_key);
 	return json({ ok: true });
-}
-
-async function handleTalkDownload(request: Request, env: AppEnv, talkId: number): Promise<Response> {
-	const talk = await getTalkRowById(env, talkId);
-	if (!talk) {
-		return jsonError(404, "Talk not found.");
-	}
-
-	const object = await env.PPTS.get(talk.ppt_object_key);
-	if (!object) {
-		return jsonError(404, "PPT file not found.");
-	}
-
-	const headers = new Headers();
-	object.writeHttpMetadata(headers);
-	headers.set("etag", object.httpEtag);
-	headers.set("content-type", talk.ppt_mime_type);
-	headers.set("content-disposition", `attachment; filename="${encodeURIComponent(talk.ppt_original_filename)}"`);
-
-	return new Response(object.body, { headers });
 }
 
 function parseTalkId(value: string | undefined): number | null {
@@ -710,7 +597,7 @@ function parseTalkId(value: string | undefined): number | null {
 async function handleApi(request: Request, env: AppEnv, ctx: ExecutionContext): Promise<Response> {
 	const url = new URL(request.url);
 	const segments = url.pathname.split("/").filter(Boolean);
-	const [, resource, id, action] = segments;
+	const [, resource, id] = segments;
 
 	if (request.method !== "GET") {
 		const sameOriginError = ensureSameOrigin(request);
@@ -745,23 +632,15 @@ async function handleApi(request: Request, env: AppEnv, ctx: ExecutionContext): 
 
 	if (resource === "talks" && request.method === "GET" && !id) {
 		const rows = await listTalkRows(env);
-		const payload: TalksPayload = { talks: rows.map((row) => mapTalkRow(request, row)) };
+		const payload: TalksPayload = { talks: rows.map(mapTalkRow) };
 		return json(payload);
 	}
 
 	if (resource === "talks" && request.method === "GET" && id === "latest") {
 		const limit = Math.min(parseInteger(url.searchParams.get("limit") ?? undefined, 3), TALK_LIMIT_MAX);
 		const rows = await listTalkRows(env, limit);
-		const payload: TalksPayload = { talks: rows.map((row) => mapTalkRow(request, row)) };
+		const payload: TalksPayload = { talks: rows.map(mapTalkRow) };
 		return json(payload);
-	}
-
-	if (resource === "talks" && request.method === "GET" && action === "download") {
-		const talkId = parseTalkId(id);
-		if (!talkId) {
-			return jsonError(400, "Invalid talk id.");
-		}
-		return handleTalkDownload(request, env, talkId);
 	}
 
 	if (resource === "talks" && request.method === "GET" && id) {
@@ -773,7 +652,7 @@ async function handleApi(request: Request, env: AppEnv, ctx: ExecutionContext): 
 		if (!talk) {
 			return jsonError(404, "Talk not found.");
 		}
-		const payload: TalkPayload = { talk: mapTalkDetail(request, talk) };
+		const payload: TalkPayload = { talk: mapTalkDetail(talk) };
 		return json(payload);
 	}
 
